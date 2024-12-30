@@ -1,7 +1,7 @@
 import tensorflow as tf
 from tensorflow.keras import Model
 from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import Embedding, Conv1D, GlobalMaxPooling1D, Dropout, Dense
+from tensorflow.keras.layers import Embedding, Conv1D, GlobalMaxPooling1D, Dropout, Dense, BatchNormalization
 from tensorflow.keras.regularizers import l2, l1
 
 # ## MODEL BUILDING
@@ -16,28 +16,78 @@ from tensorflow.keras.regularizers import l2, l1
 # ])
 
 ## MODEL BUILDING
-class TextAnalysisModel:
-    def __init__(self, vocab_size, embed_dim, max_length, conv_units, dense_units, output, kernels=6, regularizer=0.01, dropout=0.2):
-        super(TextAnalysisModel, self).__init__()
-
-        self.conv_units = conv_units
-        self.dense_units = dense_units
-        self.output = output
-        self.kernels = kernels
-        self.regularizer = regularizer
-        self.dropout = dropout
-
-    def build_model(self):
-        model = Sequential([
-            layers.Embedding(vocab_size, embed_dim, input_length=max_length),
-            layers.Conv1D(self.conv_units, self.kernels, activation='relu', kernel_regularizer=regularizers.l2(self.regularizer)),  # Adding L2 regularization
-            layers.GlobalMaxPooling1D(),
-            # layers.Dropout(self.dropout),  # Adding dropout to prevent overfitting
-            layers.Dense(self.dense_units, activation='relu', kernel_regularizer=l1(self.regularizer)),  # Adding L1 regularization
-            layers.Dropout(self.dropout),  # Adding dropout to prevent overfitting
-            layers.Dense(self.output, activation='softmax', kernel_regularizer=l2(self.regularizer)),  # Adding L2 regularization
-        ])
-        return model
+class TextClassifier(Model):
+    def __init__(self, vocab_size, embed_dim, max_length, num_classes, embedding_matrix=None):
+        super(TextClassifier, self).__init__()
+        
+        # Embedding layer
+        self.embedding = Embedding(
+            vocab_size, 
+            embed_dim, 
+            # input_length=max_length,
+            weights=[embedding_matrix] if embedding_matrix is not None else None,
+            trainable=embedding_matrix is None
+        )
+        
+        # Multiple parallel convolution layers
+        self.conv1 = Conv1D(128, 3, activation='relu', padding='same')
+        self.conv2 = Conv1D(64, 4, activation='relu', padding='same')
+        self.conv3 = Conv1D(64, 5, activation='relu', padding='same')
+        
+        # Pooling layers
+        self.pool1 = GlobalMaxPooling1D()
+        self.pool2 = GlobalMaxPooling1D()
+        self.pool3 = GlobalMaxPooling1D()
+        
+        # Batch normalization and dropout
+        self.batch_norm1 = BatchNormalization()
+        self.dropout1 = Dropout(0.4)
+        
+        # Dense layers
+        self.dense1 = Dense(256, activation='relu')
+        self.batch_norm2 = BatchNormalization()
+        self.dropout2 = Dropout(0.4)
+        
+        self.dense2 = Dense(128, activation='relu')
+        self.batch_norm3 = BatchNormalization()
+        self.dropout3 = Dropout(0.3)
+        
+        # Output layer
+        self.output_layer = Dense(num_classes, activation='softmax')
+        
+    def call(self, inputs, training=False):
+        # Embedding
+        x = self.embedding(inputs)
+        
+        # Parallel convolutions
+        conv1 = self.conv1(x)
+        conv2 = self.conv2(x)
+        conv3 = self.conv3(x)
+        
+        # Pooling
+        pool1 = self.pool1(conv1)
+        pool2 = self.pool2(conv2)
+        pool3 = self.pool3(conv3)
+        
+        # Concatenate
+        concat = tf.keras.layers.concatenate([pool1, pool2, pool3])
+        
+        # First dense block
+        x = self.batch_norm1(concat, training=training)
+        x = self.dropout1(x, training=training)
+        x = self.dense1(x)
+        
+        # Second dense block
+        x = self.batch_norm2(x, training=training)
+        x = self.dropout2(x, training=training)
+        x = self.dense2(x)
+        
+        # Third dense block
+        x = self.batch_norm3(x, training=training)
+        x = self.dropout3(x, training=training)
+        
+        # Output
+        return self.output_layer(x)
 
 ## Model Building
 class TextAnalysisModel2(Model):
@@ -46,8 +96,14 @@ class TextAnalysisModel2(Model):
 
         # Initialize the embedding layer with weights if provided
         self.embedding = Embedding(vocab_size, embed_dim, input_length=max_length, weights=[embedding_matrix] if embedding_matrix is not None else None)
-        self.conv1 = Conv1D(conv_units, kernels, activation='relu', kernel_regularizer=l2(regularizer))  # Adding L2 regularization
-        self.global_pool = GlobalMaxPooling1D()
+        self.conv1 = Conv1D(conv_units, kernels, activation='relu', padding='same')  # Removed L2 Reg
+        self.conv2 = Conv1D(conv_units, kernels, activation='relu', padding='same')
+        self.conv3 = Conv1D(conv_units, kernels, activation='relu', padding='same')
+
+        self.global_pool1 = GlobalMaxPooling1D()
+        self.global_pool2 = GlobalMaxPooling1D()
+        self.global_pool3 = GlobalMaxPooling1D()
+
         self.dropout1 = Dropout(dropout)  # First dropout to prevent overfitting
         self.dense1 = Dense(dense_units, activation='relu', kernel_regularizer=l1(regularizer))  # Adding L1 regularization
         self.dropout2 = Dropout(dropout)  # Second dropout to prevent overfitting
@@ -58,8 +114,14 @@ class TextAnalysisModel2(Model):
 
     def call(self, inputs, training: bool = False):
         x = self.embedding(inputs)
+
         x = self.conv1(x)
-        x = self.global_pool(x)
+        x = self.conv2(x)
+        x = self.conv3(x)
+
+        x = self.global_pool1(x)
+        x = self.global_pool2(x)
+        x = self.global_pool3(x)
 
         if training:
             x = self.dropout1(x)
