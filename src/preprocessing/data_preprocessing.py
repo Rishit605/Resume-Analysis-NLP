@@ -216,13 +216,15 @@ from nltk.tokenize import word_tokenize
 import tensorflow as tf
 
 class NLPPreprocessor:
-    def __init__(self, max_words=10000, max_length=500, embedding_dim=100):
+    def __init__(self, max_words=10000, max_length=500, embedding_dim=100, TFDataset: bool = False, PyTorch: bool = False):
         self.max_words = max_words
         self.max_length = max_length
         self.embedding_dim = embedding_dim
         self.tokenizer = Tokenizer(num_words=max_words, oov_token='<OOV>')
         self.label_encoder = LabelEncoder()
         self.word2vec_model = None
+        self.TFDataset = TFDataset
+        self.PyTorch = PyTorch
         
     def analyze_text_lengths(self, texts):
         """Analyze text lengths to help determine optimal max_length"""
@@ -248,10 +250,10 @@ class NLPPreprocessor:
         
         # Train Word2Vec model
         self.word2vec_model = Word2Vec(sentences=tokenized_texts,
-                                     vector_size=self.embedding_dim,
-                                     window=5,
-                                     min_count=1,
-                                     workers=4)
+                                    vector_size=self.embedding_dim,
+                                    window=5,
+                                    min_count=1,
+                                    workers=4)
         
         # Create embedding matrix
         embedding_matrix = np.zeros((self.max_words, self.embedding_dim))
@@ -281,7 +283,7 @@ class NLPPreprocessor:
         
         # Pad sequences
         padded_sequences = pad_sequences(sequences, maxlen=self.max_length,
-                                       padding='post', truncating='post')
+                                    padding='post', truncating='post')
         
         # Encode labels
         encoded_labels = self.label_encoder.fit_transform(labels)
@@ -306,35 +308,76 @@ class NLPPreprocessor:
             random_state=42
         )
         
-        # Prepare TF datasets for training
-        print("Creating TF datasets...")
-        train_dataset = tf.data.Dataset.from_tensor_slices((X_train, y_train)) \
-            .shuffle(10000).batch(32)
-        val_dataset = tf.data.Dataset.from_tensor_slices((X_val, y_val)).batch(32)
-        test_dataset = tf.data.Dataset.from_tensor_slices((X_test, y_test)).batch(32)
+        if self.TFDataset:
+            # Prepare TF datasets for training
+            print("Creating TF datasets...")
+            train_dataset = tf.data.Dataset.from_tensor_slices((X_train, y_train)) \
+                .shuffle(10000).batch(32)
+            val_dataset = tf.data.Dataset.from_tensor_slices((X_val, y_val)).batch(32)
+            test_dataset = tf.data.Dataset.from_tensor_slices((X_test, y_test)).batch(32)
+            
+            return {
+                'train_dataset': train_dataset,
+                'val_dataset': val_dataset,
+                'test_dataset': test_dataset,
+                'X_train': X_train,
+                'X_val': X_val,
+                'X_test': X_test,
+                'y_train': y_train,
+                'y_val': y_val,
+                'y_test': y_test,
+                'vocab_size': len(self.tokenizer.word_index) + 1,
+                'num_classes': len(self.label_encoder.classes_),
+                'embedding_matrix': embedding_matrix
+            }
+
+
+        if self.PyTorch:
+            # Prepare Pytorch datasets for training
+            print("Creating PyTorch datasets...")
+            train_dataset = torch.utils.data.TensorDataset(X_train, y_train)
+            val_dataset = torch.utils.data.TensorDataset(X_val, y_val)
+            test_dataset = torch.utils.data.TensorDataset(X_test, y_test)
+
+            train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=32, shuffle=True)
+            val_loader = torch.utils.data.DataLoader(val_dataset, batch_size=32, shuffle=False)
+            test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=32, shuffle=False)
+
+            return {
+                'train_loader': train_loader,
+                'val_loader': val_loader,
+                'test_loader': test_loader,
+                'X_train': X_train,
+                'X_val': X_val,
+                'X_test': X_test,
+                'y_train': y_train,
+                'y_val': y_val,
+                'y_test': y_test,
+                'vocab_size': len(self.tokenizer.word_index) + 1,
+                'num_classes': len(self.label_encoder.classes_),
+                'embedding_matrix': embedding_matrix
+            }
+
         
-        return {
-            'train_dataset': train_dataset,
-            'val_dataset': val_dataset,
-            'test_dataset': test_dataset,
-            'X_train': X_train,
-            'X_val': X_val,
-            'X_test': X_test,
-            'y_train': y_train,
-            'y_val': y_val,
-            'y_test': y_test,
-            'vocab_size': len(self.tokenizer.word_index) + 1,
-            'num_classes': len(self.label_encoder.classes_),
-            'embedding_matrix': embedding_matrix
-        }
-    
+        return { # Returns simple splitted Numpy Array
+                'X_train': X_train,
+                'X_val': X_val,
+                'X_test': X_test,
+                'y_train': y_train,
+                'y_val': y_val,
+                'y_test': y_test,
+                'vocab_size': len(self.tokenizer.word_index) + 1,
+                'num_classes': len(self.label_encoder.classes_),
+                'embedding_matrix': embedding_matrix
+            }
+
     def predict_process(self, text):
         """Process a single text for prediction"""
         # Convert to sequence
         sequence = self.tokenizer.texts_to_sequences([text])
         # Pad sequence
         padded = pad_sequences(sequence, maxlen=self.max_length,
-                             padding='post', truncating='post')
+                            padding='post', truncating='post')
         return padded
     
     def decode_predictions(self, predictions):
@@ -374,3 +417,138 @@ processed_text = preprocessor.predict_process(new_text)
 predictions = model.predict(processed_text)
 predicted_label = preprocessor.decode_predictions(np.argmax(predictions, axis=1))
 '''
+
+
+
+## IMBALANCED DATASET PROCESSOR ##
+
+import tensorflow as tf
+import numpy as np
+from typing import List, Dict, Union, Tuple
+from collections import Counter
+from sklearn.utils import resample
+
+class ImbalancedNLPHandler:
+    def __init__(self,
+                 preprocessor: NLPPreprocessor,
+                 strategy: str = "weighted"):
+        """
+        Combines NLPPreprocessor with imbalanced data handling.
+        
+        Args:
+            preprocessor: Existing NLPPreprocessor instance
+            strategy: "weighted", "oversample", or "undersample"
+        """
+        self.preprocessor = preprocessor
+        self.strategy = strategy
+    
+    def calculate_class_weights(self, labels: List) -> Dict:
+        """Calculate class weights for imbalanced data."""
+        class_counts = Counter(labels)
+        total = len(labels)
+        weights = {cls: total / count for cls, count in class_counts.items()}
+        
+        # Normalize weights
+        weight_sum = sum(weights.values())
+        weights = {cls: weight / weight_sum for cls, weight in weights.items()}
+        
+        return weights
+    
+    def oversample(self, texts: List[str], labels: List) -> Tuple[List[str], List]:
+        """Oversample minority classes."""
+        df = pd.DataFrame({'text': texts, 'label': labels})
+        class_counts = Counter(labels)
+        majority_size = max(class_counts.values())
+        
+        balanced_dfs = []
+        for label in class_counts.keys():
+            class_df = df[df['label'] == label]
+            if len(class_df) < majority_size:
+                resampled = resample(class_df,
+                                   replace=True,
+                                   n_samples=majority_size,
+                                   random_state=42)
+                balanced_dfs.append(resampled)
+            else:
+                balanced_dfs.append(class_df)
+        
+        balanced_df = pd.concat(balanced_dfs)
+        return balanced_df['text'].tolist(), balanced_df['label'].tolist()
+    
+    def undersample(self, texts: List[str], labels: List) -> Tuple[List[str], List]:
+        """Undersample majority classes."""
+        df = pd.DataFrame({'text': texts, 'label': labels})
+        class_counts = Counter(labels)
+        minority_size = min(class_counts.values())
+        
+        balanced_dfs = []
+        for label in class_counts.keys():
+            class_df = df[df['label'] == label]
+            if len(class_df) > minority_size:
+                resampled = resample(class_df,
+                                   replace=False,
+                                   n_samples=minority_size,
+                                   random_state=42)
+                balanced_dfs.append(resampled)
+            else:
+                balanced_dfs.append(class_df)
+        
+        balanced_df = pd.concat(balanced_dfs)
+        return balanced_df['text'].tolist(), balanced_df['label'].tolist()
+
+    def prepare_balanced_data(self, texts: List[str], labels: List, use_word2vec: bool = False):
+        """Prepare data with imbalance handling."""
+        # Apply balancing strategy if needed
+        if self.strategy == "oversample":
+            texts, labels = self.oversample(texts, labels)
+        elif self.strategy == "undersample":
+            texts, labels = self.undersample(texts, labels)
+        
+        # Use existing preprocessor to prepare data
+        data = self.preprocessor.prepare_data(texts, labels, use_word2vec)
+        
+        # Add class weights if using weighted strategy
+        if self.strategy == "weighted":
+            class_weights = self.calculate_class_weights(data['y_train'])
+            data['class_weights'] = class_weights
+            
+            # Update datasets to use sample weights
+            weights = [class_weights[label] for label in data['y_train']]
+            data['train_dataset'] = tf.data.Dataset.from_tensor_slices(
+                (data['X_train'], data['y_train'], weights)
+            ).shuffle(10000).batch(32)
+        
+        return data
+    
+    def get_class_distribution(self, labels: List) -> Dict:
+        """Calculate class distribution percentages."""
+        total = len(labels)
+        class_counts = Counter(labels)
+        return {label: count/total * 100 for label, count in class_counts.items()}
+
+# Example custom model that can use the preprocessor's word2vec embeddings
+class CustomTextClassifier(tf.keras.Model):
+    def __init__(self, vocab_size, embedding_dim, num_classes, embedding_matrix=None):
+        super().__init__()
+        
+        if embedding_matrix is not None:
+            self.embedding = tf.keras.layers.Embedding(
+                vocab_size, embedding_dim,
+                weights=[embedding_matrix],
+                trainable=False
+            )
+        else:
+            self.embedding = tf.keras.layers.Embedding(vocab_size, embedding_dim)
+            
+        self.lstm = tf.keras.layers.LSTM(64)
+        self.dense1 = tf.keras.layers.Dense(32, activation='relu')
+        self.dropout = tf.keras.layers.Dropout(0.5)
+        self.dense2 = tf.keras.layers.Dense(num_classes, activation='softmax')
+        
+    def call(self, inputs, training=False):
+        x = self.embedding(inputs)
+        x = self.lstm(x)
+        x = self.dense1(x)
+        if training:
+            x = self.dropout(x)
+        return self.dense2(x)
