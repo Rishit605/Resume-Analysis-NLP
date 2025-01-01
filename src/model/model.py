@@ -30,9 +30,9 @@ class TextClassifier(Model):
         )
         
         # Multiple parallel convolution layers
-        self.conv1 = Conv1D(128, 3, activation='relu', padding='same')
-        self.conv2 = Conv1D(64, 4, activation='relu', padding='same')
-        self.conv3 = Conv1D(64, 5, activation='relu', padding='same')
+        self.conv1 = Conv1D(64, 3, activation='relu', padding='same')
+        self.conv2 = Conv1D(32, 4, activation='relu', padding='same')
+        self.conv3 = Conv1D(32, 5, activation='relu', padding='same')
         
         # Pooling layers
         self.pool1 = GlobalMaxPooling1D()
@@ -44,11 +44,11 @@ class TextClassifier(Model):
         self.dropout1 = Dropout(0.4)
         
         # Dense layers
-        self.dense1 = Dense(256, activation='relu')
+        self.dense1 = Dense(128, activation='relu')
         self.batch_norm2 = BatchNormalization()
         self.dropout2 = Dropout(0.4)
         
-        self.dense2 = Dense(128, activation='relu')
+        self.dense2 = Dense(64, activation='relu')
         self.batch_norm3 = BatchNormalization()
         self.dropout3 = Dropout(0.3)
         
