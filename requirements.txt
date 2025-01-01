@@ -9,3 +9,4 @@ hyperopt
 tensorflow
 pdfminer.six
 nltk
+unittest2
