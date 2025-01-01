@@ -526,29 +526,4 @@ class ImbalancedNLPHandler:
         class_counts = Counter(labels)
         return {label: count/total * 100 for label, count in class_counts.items()}
 
-# Example custom model that can use the preprocessor's word2vec embeddings
-class CustomTextClassifier(tf.keras.Model):
-    def __init__(self, vocab_size, embedding_dim, num_classes, embedding_matrix=None):
-        super().__init__()
         
-        if embedding_matrix is not None:
-            self.embedding = tf.keras.layers.Embedding(
-                vocab_size, embedding_dim,
-                weights=[embedding_matrix],
-                trainable=False
-            )
-        else:
-            self.embedding = tf.keras.layers.Embedding(vocab_size, embedding_dim)
-            
-        self.lstm = tf.keras.layers.LSTM(64)
-        self.dense1 = tf.keras.layers.Dense(32, activation='relu')
-        self.dropout = tf.keras.layers.Dropout(0.5)
-        self.dense2 = tf.keras.layers.Dense(num_classes, activation='softmax')
-        
-    def call(self, inputs, training=False):
-        x = self.embedding(inputs)
-        x = self.lstm(x)
-        x = self.dense1(x)
-        if training:
-            x = self.dropout(x)
-        return self.dense2(x)
