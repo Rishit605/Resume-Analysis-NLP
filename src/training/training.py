@@ -2,6 +2,7 @@ import os, sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import re
+from typing import Dict
 
 import pandas as pd
 import numpy as np
@@ -19,123 +20,123 @@ from tensorflow.keras.preprocessing.text import Tokenizer
 from tensorflow.keras.preprocessing.sequence import pad_sequences
 from tensorflow.keras import regularizers
 
+from src.preprocessing.data_preprocessing import ResumeTextPreprocessor, NLPPreprocessor, ImbalancedNLPHandler
+from src.model.model import TextClassifier
 
-from src.preprocessing.data_preprocessing import ResumeTextPreprocessor, NLPPreprocessor
-from src.model.model import TextAnalysisModel2
-from src.utils.helpers import *
+from src.utils.helpers import plot_accuracy
+
 
 # Calling base dataset.
 def call_data():
-    return pd.read_csv(r'C:\Projs\COde\ResAnalysis\Resume-Analysis-NLP\dataset\resume_dataset.csv')
+    dataf = pd.read_csv(r'C:\Projs\COde\ResAnalysis\Resume-Analysis-NLP\dataset\resume_dataset.csv')
+    dataf['cleaned_text'] = dataf['Resume'].apply(ResumeTextPreprocessor().process_and_check)
+    return dataf
 
-# Output Lenght
-def output_classes(df: pd.DataFrame) -> int:
-    
-    # Defining the Classes
-    classes = list(df['Category'].unique())
-    return len(classes)
-
-# Data Preprocessing
-def data_preparing_func(dataf: pd.DataFrame):
-    data = ResumeTextPreprocessor().prepare_data(
-        df=dataf,
-        text_column='Resume',
-        label_column='Category',
-        test_size=0.2,
-        val_size=0.1
+def preprocessor_func():
+    preprocessor = NLPPreprocessor(
+        max_words=10000,
+        max_length=500,
+        embedding_dim=100,
+        TFDataset=True
     )
+    return preprocessor
 
+def data_preparing_func(preprocessor, dataf: pd.DataFrame) -> pd.DataFrame:
+    data = preprocessor.prepare_data(
+        texts=dataf['cleaned_text'],
+        labels=dataf['Category'],
+        use_word2vec=True  # Use Word2Vec embeddings
+    )
     return data
 
-def create_and_compile_model(
-    vocab_size,
-    output,
-    embed_dim=100,
-    max_length=100,
-    conv_units=64,
-    kernels=3,
-    dense_units=64,
-    regularizer=0.01,
-    dropout=0.5
-):
-    model = TextAnalysisModel2(
+def Imbalanced_Data_Handler(preprocessor, strategy: str = "oversample"):
+    """
+    Three methods for handling imbalancing:
+    
+    - Weighted
+    - Oversample
+    - Undersample
+
+    """
+    handler = ImbalancedNLPHandler(
+        preprocessor=preprocessor,
+        strategy=strategy
+    )
+    return handler
+
+def class_distribution(data) -> Dict:
+    """
+    Check initial class distribution
+    """
+    return handler.get_class_distribution(data["Category"])
+
+def prep_model_data(data, handler, word2vec: bool = True):
+    # Prepare data with imbalance handling
+    return handler.prepare_balanced_data(data["cleaned_text"], data["Category"], use_word2vec=word2vec)
+
+def class_weights(data):
+    class_weights = handler.calculate_class_weights(data["y_train"])
+    weights = [class_weights[label] for label in data['y_train']]
+    return weights
+
+def model_comp(data, preprocessor):
+    # Setting the Vocab Size from the Embedding Matrix
+    if data['embedding_matrix'] is not None:
+        vocab_size = data['embedding_matrix'].shape[0] 
+
+    # Initailize Model
+    model_2 = TextClassifier(
         vocab_size=vocab_size,
-        embed_dim=embed_dim,
-        max_length=max_length,
-        conv_units=conv_units,
-        kernels=kernels,
-        dense_units=dense_units,
-        output=output,
-        regularizer=regularizer,
-        dropout=dropout
+        embed_dim=preprocessor.embedding_dim,
+        num_classes=data['num_classes'],
+        embedding_matrix=data['embedding_matrix']
     )
-    
-    model.compile(
+
+    # Compile model
+    model_2.compile(
         optimizer='adam',
-        loss='categorical_crossentropy',  # Use 'sparse_categorical_crossentropy' if labels are not one-hot encoded
-        metrics=['categorical_accuracy']
+        loss='sparse_categorical_crossentropy',
+        metrics=['accuracy']
     )
-    
-    return model
+    return model_2
 
 
-#  Initialize the model with your parameters
-data = data_preparing_func(call_data())
-model = create_and_compile_model(
-    vocab_size=data['vocab_size'],
-    output=data['num_classes'],
-    embed_dim=100,
-    max_length=100,
-    conv_units=64,
-    kernels=3,
-    dense_units=32,
-    regularizer=0.01,
-    dropout=0.5
-)
-
-def train_model(model, X_train, y_train, X_val, y_val, batch_size=32, epochs=10):
-    history = model.fit(
-        X_train, y_train,
-        validation_data=(X_val, y_val),
-        batch_size=batch_size,
-        epochs=epochs,
-        verbose=1
-    )
-    return history
-
+def train_step(Handler, model, data):
+    # Train model with class weights if using weighted strategy
+    if Handler.strategy == "weighted":
+        print("Using Weighted Class Balancing!")
+        history = model.fit(
+            data['train_dataset'],
+            validation_data=data['val_dataset'],
+            epochs=50,
+            # class_weight=data['class_weights'] ### To be used when large enough Dataset ###
+        )
+    elif Handler.strategy == "oversample":
+        print("Using Oversampling Class Balancing!")
+        history = model.fit(
+            data['train_dataset'],
+            validation_data=data['val_dataset'],
+            epochs=50
+        )
+        return history
+    else:
+        history = model.fit(
+            data['train_dataset'],
+            validation_data=data['val_dataset'],
+            epochs=50
+        )
+        return history
 
 
 if __name__ == "__main__":
+    
+    raw_data = call_data()
+    handler = Imbalanced_Data_Handler(preprocessor_func())
+    data = prep_model_data(raw_data, handler)
 
-    # data = data_preparing_func(ResumeTextPreprocessor().process_and_check(call_data()['Resume'][0]))
+    fin_Data = data_preparing_func(preprocessor_func(), call_data())
 
-    #     # Initialize preprocessor
-    # preprocessor = NLPPreprocessor(max_words=10000, max_length=500, embedding_dim=100)
+    model = model_comp(fin_Data, preprocessor_func())
+    train_model = train_step(handler, model, fin_Data)
 
-    # # Prepare your cleaned data
-    # data = preprocessor.prepare_data(
-    #     texts=df['cleaned_resume'],
-    #     labels=df['category'],
-    #     use_word2vec=True  # Set to True if you want to use Word2Vec embeddings
-    # )
-
-    # # Create and compile your model
-    # model = create_model(
-    #     vocab_size=data['vocab_size'],
-    #     embedding_dim=100,
-    #     num_classes=data['num_classes'],
-    #     embedding_matrix=data['embedding_matrix']  # Pass this if using Word2Vec
-    # )
-
-    # # Train the model using the TF datasets
-    # history = model.fit(
-    #     data['train_dataset'],
-    #     validation_data=data['val_dataset'],
-    #     epochs=10
-    # )
-
-    # print(data['num_classes'])
-    print(data)
-
-    # history = train_model(model, data['X_train'], data['y_train'], data['X_val'], data['y_val'], batch_size=32, epochs=200)
-    # plot_accuracy(data)
+    plot_accuracy(train_model, 'accuracy', 'val_accuracy')
