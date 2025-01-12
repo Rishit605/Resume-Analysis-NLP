@@ -17,7 +17,7 @@ from tensorflow.keras.regularizers import l2, l1
 
 ## MODEL BUILDING
 class TextClassifier(Model):
-    def __init__(self, vocab_size, embed_dim, max_length, num_classes, embedding_matrix=None):
+    def __init__(self, vocab_size, embed_dim, num_classes, embedding_matrix=None):
         super(TextClassifier, self).__init__()
         
         # Embedding layer
