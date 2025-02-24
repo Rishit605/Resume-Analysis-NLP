@@ -222,6 +222,7 @@ class NLPPreprocessor:
         self.embedding_dim = embedding_dim
         self.tokenizer = Tokenizer(num_words=max_words, oov_token='<OOV>')
         self.label_encoder = LabelEncoder()
+        self.onehot_encoder = OneHotEncoder(sparse_output=False)
         self.word2vec_model = None
         self.TFDataset = TFDataset
         self.PyTorch = PyTorch
@@ -286,7 +287,8 @@ class NLPPreprocessor:
                                     padding='post', truncating='post')
         
         # Encode labels
-        encoded_labels = self.label_encoder.fit_transform(labels)
+        # encoded_labels = self.label_encoder.fit_transform(labels)
+        encoded_labels = self.onehot_encoder.fit_transform(labels)
         
         # Create Word2Vec embeddings if requested
         embedding_matrix = None
@@ -327,7 +329,8 @@ class NLPPreprocessor:
                 'y_val': y_val,
                 'y_test': y_test,
                 'vocab_size': len(self.tokenizer.word_index) + 1,
-                'num_classes': len(self.label_encoder.classes_),
+                # 'num_classes': len(self.label_encoder.classes_),
+                'num_classes': len(self.onehot_encoder.get_feature_names_out()),
                 'embedding_matrix': embedding_matrix
             }
 
@@ -431,7 +434,7 @@ from sklearn.utils import resample
 class ImbalancedNLPHandler:
     def __init__(self,
                  preprocessor: NLPPreprocessor,
-                 strategy: str = "weighted"):
+                 strategy: str = "oversample"):
         """
         Combines NLPPreprocessor with imbalanced data handling.
         
