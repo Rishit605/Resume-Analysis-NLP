@@ -20,11 +20,11 @@ class TextClassifier(Model):
     def __init__(self, vocab_size, embed_dim, num_classes, embedding_matrix=None):
         super(TextClassifier, self).__init__()
         
-        # Embedding layer
+        # Embedding layer with input_length specified
         self.embedding = Embedding(
             vocab_size, 
-            embed_dim, 
-            # input_length=max_length,
+            embed_dim,
+            input_length=500,  # Specify the sequence length
             weights=[embedding_matrix] if embedding_matrix is not None else None,
             trainable=embedding_matrix is None
         )
