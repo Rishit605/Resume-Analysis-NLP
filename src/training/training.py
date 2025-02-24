@@ -23,12 +23,14 @@ from tensorflow.keras import regularizers
 from src.preprocessing.data_preprocessing import ResumeTextPreprocessor, NLPPreprocessor, ImbalancedNLPHandler
 from src.model.model import TextClassifier
 
-from src.utils.helpers import plot_accuracy
+from src.utils.helpers import validate_and_rename_columns, PlotMetrics
 
 
 # Calling base dataset.
 def call_data():
-    dataf = pd.read_csv(r'C:\Projs\COde\ResAnalysis\Resume-Analysis-NLP\dataset\resume_dataset.csv')
+    # dataf = pd.read_csv(r'C:\Projs\COde\ResAnalysis\Resume-Analysis-NLP\dataset\resume_dataset.csv')
+    dataf_new = pd.read_csv(r'C:\Projs\COde\ResAnalysis\Resume-Analysis-NLP\dataset\resume_new.csv')
+    dataf = validate_and_rename_columns(dataf_new)
     dataf['cleaned_text'] = dataf['Resume'].apply(ResumeTextPreprocessor().process_and_check)
     return dataf
 
@@ -44,12 +46,12 @@ def preprocessor_func():
 def data_preparing_func(preprocessor, dataf: pd.DataFrame) -> pd.DataFrame:
     data = preprocessor.prepare_data(
         texts=dataf['cleaned_text'],
-        labels=dataf['Category'],
+        labels=np.array(dataf['Category']).reshape(-1, 1),
         use_word2vec=True  # Use Word2Vec embeddings
     )
     return data
 
-def Imbalanced_Data_Handler(preprocessor, strategy: str = "oversample"):
+def Imbalanced_Data_Handler(preprocessor, strategy: str = "undersample"):
     """
     Three methods for handling imbalancing:
     
@@ -83,8 +85,25 @@ def model_comp(data, preprocessor):
     # Setting the Vocab Size from the Embedding Matrix
     if data['embedding_matrix'] is not None:
         vocab_size = data['embedding_matrix'].shape[0] 
+    else:
+        vocab_size = data['vocab_size']
 
-    # Initailize Model
+    # Initialize callbacks
+    early_stopping = tf.keras.callbacks.EarlyStopping(
+        monitor='val_loss',
+        patience=10,
+        restore_best_weights=True
+    )
+    
+    checkpoint = tf.keras.callbacks.ModelCheckpoint(
+        'best_model.keras',
+        monitor='val_loss',
+        save_best_only=True,
+        mode='min',
+        verbose=1
+    )
+
+    # Initialize Model
     model_2 = TextClassifier(
         vocab_size=vocab_size,
         embed_dim=preprocessor.embedding_dim,
@@ -95,13 +114,19 @@ def model_comp(data, preprocessor):
     # Compile model
     model_2.compile(
         optimizer='adam',
-        loss='sparse_categorical_crossentropy',
-        metrics=['accuracy']
+        loss='categorical_crossentropy',
+        metrics=[
+            'accuracy',
+            tf.keras.metrics.Precision(name='precision'),
+            tf.keras.metrics.Recall(name='recall'),
+            tf.keras.metrics.AUC(name='AUC'),
+        ]
     )
-    return model_2
+        
+    return model_2, [early_stopping, checkpoint]
 
 
-def train_step(Handler, model, data):
+def train_step(Handler, model, callbacks, data):
     # Train model with class weights if using weighted strategy
     if Handler.strategy == "weighted":
         print("Using Weighted Class Balancing!")
@@ -110,33 +135,40 @@ def train_step(Handler, model, data):
             validation_data=data['val_dataset'],
             epochs=50,
             # class_weight=data['class_weights'] ### To be used when large enough Dataset ###
+            callbacks = callbacks
         )
     elif Handler.strategy == "oversample":
         print("Using Oversampling Class Balancing!")
         history = model.fit(
             data['train_dataset'],
             validation_data=data['val_dataset'],
-            epochs=50
+            epochs=50,
+            callbacks=callbacks
         )
         return history
     else:
         history = model.fit(
             data['train_dataset'],
             validation_data=data['val_dataset'],
-            epochs=50
+            epochs=50,
+            callbacks=callbacks
         )
         return history
 
 
 if __name__ == "__main__":
-    
-    raw_data = call_data()
-    handler = Imbalanced_Data_Handler(preprocessor_func())
-    data = prep_model_data(raw_data, handler)
+    handler = Imbalanced_Data_Handler(preprocessor_func(), 'undersample')
 
     fin_Data = data_preparing_func(preprocessor_func(), call_data())
 
-    model = model_comp(fin_Data, preprocessor_func())
-    train_model = train_step(handler, model, fin_Data)
+    model, calls = model_comp(fin_Data, preprocessor_func())
 
-    plot_accuracy(train_model, 'accuracy', 'val_accuracy')
+    train_model = train_step(Handler=handler, model=model, callbacks=calls, data=fin_Data)
+    
+    # Plotting the Metrics.
+    plotter = PlotMetrics()
+    plotter.plot_accuracy(history=train_model)
+    plotter.plot_loss(history=train_model)
+    plotter.plot_precision(history=train_model)
+    plotter.plot_recall(history=train_model)
+    plotter.plot_auc(history=train_model)
