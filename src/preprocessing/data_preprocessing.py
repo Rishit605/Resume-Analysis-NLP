@@ -445,10 +445,28 @@ class ImbalancedNLPHandler:
         self.preprocessor = preprocessor
         self.strategy = strategy
     
+    # def calculate_class_weights(self, labels: List) -> Dict:
+    #     """Calculate class weights for imbalanced data."""
+    #     class_counts = Counter(labels)
+    #     total = len(labels)
+    #     weights = {cls: total / count for cls, count in class_counts.items()}
+        
+    #     # Normalize weights
+    #     weight_sum = sum(weights.values())
+    #     weights = {cls: weight / weight_sum for cls, weight in weights.items()}
+        
+    #     return weights
+
     def calculate_class_weights(self, labels: List) -> Dict:
-        """Calculate class weights for imbalanced data."""
-        class_counts = Counter(labels)
-        total = len(labels)
+        """Calculate class weights for imbalanced data with one-hot encoded labels."""
+        # Convert one-hot encoded labels to class indices
+        label_indices = np.argmax(labels, axis=1)
+        
+        # Calculate class counts
+        class_counts = Counter(label_indices)
+        total = len(label_indices)
+        
+        # Calculate weights for each class
         weights = {cls: total / count for cls, count in class_counts.items()}
         
         # Normalize weights
