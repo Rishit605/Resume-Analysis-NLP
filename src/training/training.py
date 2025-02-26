@@ -20,7 +20,12 @@ from tensorflow.keras.preprocessing.text import Tokenizer
 from tensorflow.keras.preprocessing.sequence import pad_sequences
 from tensorflow.keras import regularizers
 
-from src.preprocessing.data_preprocessing import ResumeTextPreprocessor, NLPPreprocessor, ImbalancedNLPHandler
+from src.preprocessing.data_preprocessing import (
+    ResumeTextPreprocessor,
+    NLPPreprocessor,
+    ImbalancedNLPHandler,
+)
+
 from src.model.model import TextClassifier
 
 from src.utils.helpers import validate_and_rename_columns, PlotMetrics
@@ -134,9 +139,10 @@ def train_step(Handler, model, callbacks, data):
             data['train_dataset'],
             validation_data=data['val_dataset'],
             epochs=50,
-            # class_weight=data['class_weights'] ### To be used when large enough Dataset ###
+            class_weight=Handler.calculate_class_weights(data['y_train']), ### To be used when large enough Dataset ###
             callbacks = callbacks
         )
+        return history
     elif Handler.strategy == "oversample":
         print("Using Oversampling Class Balancing!")
         history = model.fit(
@@ -157,7 +163,7 @@ def train_step(Handler, model, callbacks, data):
 
 
 if __name__ == "__main__":
-    handler = Imbalanced_Data_Handler(preprocessor_func(), 'undersample')
+    handler = Imbalanced_Data_Handler(preprocessor_func(), 'weighted')
 
     fin_Data = data_preparing_func(preprocessor_func(), call_data())
 
