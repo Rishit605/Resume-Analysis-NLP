@@ -4,7 +4,7 @@ Overview:
 The NLP-based Resume Classification System is a machine learning project that uses natural language processing techniques to classify resumes into 25 different categories based on the job position and qualifications. The system is built using Python, TensorFlow-Keras, and NLTK libraries. The system is hosted on a local server that accepts input resumes in PDF form using a Flask API.
 
 ## Dataset
-The dataset consists of 1000 labelled resumes (labelled according to the primary category/class that a particular resume belongs to) in a csv format. We will be using this csv formatted resume dataset to train our model for classification. Our model should then be able to work on any unseen resume and some other data that was picked form diffrent sources likely Kaggle etc.
+The dataset consists of 15k labelled resumes (labelled according to the primary category/class that a particular resume belongs to) in a csv format. We will be using this csv formatted resume dataset to train our model for classification. Our model should then be able to work on any unseen resume and some other data that was picked form diffrent sources likely Kaggle etc.
 
 ## Features:
 
