@@ -8,7 +8,7 @@ The dataset consists of 15k labelled resumes (labelled according to the primary 
 
 ## Features:
 
-* Classifies resumes into 25 different categories based on job position and qualifications.
+* Classifies resumes into 43 different categories based on job position and qualifications.
 * Accepts input resumes in PDF form using a Flask API.
 * Uses TensorFlow-Keras and NLTK libraries for natural language processing and machine learning.
 * Hosted on a local server, making it easily accessible to the user.
