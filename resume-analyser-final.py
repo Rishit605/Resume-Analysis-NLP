@@ -12,12 +12,11 @@ import tensorflow as tf
 from tensorflow import keras
 from keras import layers
 from keras.models import Sequential
-from tensorflow.keras.preprocessing.text import Tokenizer
+from keras.preprocessing.text import Tokenizer
 from keras_preprocessing.sequence import pad_sequences
-from keras import regularizers
 
 # Importing the Dataset
-df = pd.read_csv(r'C:\Projs\COde\ResAnalysis\Resume-Analysis-NLP\dataset\resume_dataset.csv')
+df = pd.read_csv('/content/dataset/resume_dataset.csv')
 print(df.head(10))
 
 df2 = df.copy(deep=True)
@@ -113,57 +112,53 @@ word_idx = token.word_index
 train_seq = token.texts_to_sequences(df4['normalized_text'].values)
 train_padded = pad_sequences(train_seq, maxlen=max_length, truncating=trunc_type)
 
-
 ## MODEL BUILDING
 model = Sequential([
     layers.Embedding(vocab_size, embed_dim, input_length=max_length),
-    layers.Conv1D(128, 8, activation='relu', kernel_regularizer=regularizers.l2(0.01)),  # Adding L2 regularization
+    layers.Conv1D(128, 8, activation='relu'),
     layers.GlobalMaxPooling1D(),
-    layers.Dropout(0.2),  # Adding dropout to prevent overfitting
-    layers.Dense(48, activation='relu', kernel_regularizer=regularizers.l1(0.01)),  # Adding L1 regularization
-    layers.Dropout(0.2),  # Adding dropout to prevent overfitting
-    layers.Dense(25, activation='softmax', kernel_regularizer=regularizers.l2(0.01)),  # Adding L2 regularization
+
+    layers.Dense(48, activation='relu'),
+    layers.Dense(25, activation='softmax'),
 ])
 
 model.summary()
 
-# Adjust the model compilation
-num_classes = len(classes)
+model.output_shape
+
 model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
 
-# Fix the y_train creation
-y_train = pd.get_dummies(df4['Label']).values  # Change 'label' to 'Label'
-
 # Training the compiled model
-history = model.fit(train_padded, y_train, epochs=10, batch_size=32, validation_split=0.2)
+y_train = pd.get_dummies(df4['label']).values
+# [ #train_df['label'].values, #test_df['label']. values))] For binary entropy loss function usage
+history = model.fit(train_padded, y_train, epochs=10, batch_size=32)
 
-# Update the plot_loss_acc function to handle the case when validation data is not present
+
+# Plotting the accuracy-loss function graph curve for better insight.
 def plot_loss_acc(history):
     acc = history.history['accuracy']
+    val_acc = history.history['val_accuracy']
     loss = history.history['loss']
+    val_loss = history.history['val_loss']
+
     epochs = range(len(acc))
 
-    plt.figure(figsize=(12, 5))
-    plt.subplot(1, 2, 1)
-    plt.plot(epochs, acc, 'bo-', label='Training accuracy')
-    if 'val_accuracy' in history.history:
-        val_acc = history.history['val_accuracy']
-        plt.plot(epochs, val_acc, 'r^-', label='Validation accuracy')
+    plt.plot(epochs, acc, 'bo', label='Training accuracy')
+    plt.plot(epochs, val_acc, 'b', label='Validation accuracy')
     plt.title('Training and validation accuracy')
     plt.legend()
 
-    plt.subplot(1, 2, 2)
-    plt.plot(epochs, loss, 'bo-', label='Training Loss')
-    if 'val_loss' in history.history:
-        val_loss = history.history['val_loss']
-        plt.plot(epochs, val_loss, 'r^-', label='Validation Loss')
+    plt.figure()
+
+    plt.plot(epochs, loss, 'bo', label='Training Loss')
+    plt.plot(epochs, val_loss, 'b', label='Validation Loss')
     plt.title('Training and validation loss')
     plt.legend()
 
-    plt.tight_layout()
     plt.show()
 
-# Call the plotting function
+
 plot_loss_acc(history)
+
 
 model.save('res_ana.h5')
