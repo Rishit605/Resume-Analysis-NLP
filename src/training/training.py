@@ -86,7 +86,7 @@ def class_weights(data):
     weights = [class_weights[label] for label in data['y_train']]
     return weights
 
-def model_comp(data, preprocessor):
+def model_comp(data, preprocessor, training: bool = True):
     # Setting the Vocab Size from the Embedding Matrix
     if data['embedding_matrix'] is not None:
         vocab_size = data['embedding_matrix'].shape[0] 
@@ -104,12 +104,13 @@ def model_comp(data, preprocessor):
         'best_model.keras',
         monitor='val_loss',
         save_best_only=True,
+        save_weights_only=False,
         mode='min',
         verbose=1
     )
 
     # Initialize Model
-    model_2 = TextClassifier(
+    model = TextClassifier(
         vocab_size=vocab_size,
         embed_dim=preprocessor.embedding_dim,
         num_classes=data['num_classes'],
@@ -117,7 +118,7 @@ def model_comp(data, preprocessor):
     )
 
     # Compile model
-    model_2.compile(
+    model.compile(
         optimizer='adam',
         loss='categorical_crossentropy',
         metrics=[
@@ -127,18 +128,25 @@ def model_comp(data, preprocessor):
             tf.keras.metrics.AUC(name='AUC'),
         ]
     )
+
+    if training:
+        # # Assuming 'model' is your compiled Keras model
+        # model_json = model.to_json()
+        # with open("model_architecture.json", "w") as json_file:
+        #     json_file.write(model_json)
         
-    return model_2, [early_stopping, checkpoint]
+        return model, [early_stopping, checkpoint]
+    else:
+        return model
 
-
-def train_step(Handler, model, callbacks, data):
+def train_step(Handler, model, callbacks, data, Epochs):
     # Train model with class weights if using weighted strategy
     if Handler.strategy == "weighted":
         print("Using Weighted Class Balancing!")
         history = model.fit(
             data['train_dataset'],
             validation_data=data['val_dataset'],
-            epochs=50,
+            epochs=Epochs,
             class_weight=Handler.calculate_class_weights(data['y_train']), ### To be used when large enough Dataset ###
             callbacks = callbacks
         )
@@ -148,7 +156,7 @@ def train_step(Handler, model, callbacks, data):
         history = model.fit(
             data['train_dataset'],
             validation_data=data['val_dataset'],
-            epochs=50,
+            epochs=Epochs,
             callbacks=callbacks
         )
         return history
@@ -156,7 +164,7 @@ def train_step(Handler, model, callbacks, data):
         history = model.fit(
             data['train_dataset'],
             validation_data=data['val_dataset'],
-            epochs=50,
+            epochs=Epochs,
             callbacks=callbacks
         )
         return history
@@ -166,13 +174,16 @@ if __name__ == "__main__":
     handler = Imbalanced_Data_Handler(preprocessor_func(), 'weighted')
 
     fin_Data = data_preparing_func(preprocessor_func(), call_data())
-
+    # print(fin_Data)
     model, calls = model_comp(fin_Data, preprocessor_func())
 
-    train_model = train_step(Handler=handler, model=model, callbacks=calls, data=fin_Data)
+    train_model = train_step(Handler=handler, model=model, callbacks=calls, data=fin_Data, Epochs=1)
     
+    model.load_weights("C:/Projs/COde/ResAnalysis/Resume-Analysis-NLP/best_weights.weights.h5")
+
     # Plotting the Metrics.
     plotter = PlotMetrics()
+    plotter.plot_combined_metrics(history=train_model)
     plotter.plot_accuracy(history=train_model)
     plotter.plot_loss(history=train_model)
     plotter.plot_precision(history=train_model)
