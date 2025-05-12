@@ -3,6 +3,7 @@ import nltk
 from nltk.corpus import stopwords
 from nltk.tokenize import word_tokenize
 from nltk.stem import WordNetLemmatizer
+import joblib
 
 import tensorflow as tf
 from tensorflow import keras
@@ -216,16 +217,33 @@ from nltk.tokenize import word_tokenize
 import tensorflow as tf
 
 class NLPPreprocessor:
-    def __init__(self, max_words=10000, max_length=500, embedding_dim=100, TFDataset: bool = False, PyTorch: bool = False):
+    def __init__(
+        self, 
+        max_words=10000,
+        max_length=500,
+        embedding_dim=100,
+        training: bool = True,
+        Token = None,
+        Encoder = None,
+        TFDataset: bool = False,
+        PyTorch: bool = False):
+
+        
         self.max_words = max_words
         self.max_length = max_length
         self.embedding_dim = embedding_dim
-        self.tokenizer = Tokenizer(num_words=max_words, oov_token='<OOV>')
-        self.label_encoder = LabelEncoder()
-        self.onehot_encoder = OneHotEncoder(sparse_output=False)
+        # self.label_encoder = LabelEncoder()
         self.word2vec_model = None
         self.TFDataset = TFDataset
         self.PyTorch = PyTorch
+
+        if training:
+            self.tokenizer = Tokenizer(num_words=max_words, oov_token='<OOV>')
+            self.onehot_encoder = OneHotEncoder(handle_unknown="ignore", sparse_output=False)
+        else:
+            self.tokenizer = Token
+            self.onehot_encoder = Encoder
+        
         
     def analyze_text_lengths(self, texts):
         """Analyze text lengths to help determine optimal max_length"""
@@ -278,6 +296,11 @@ class NLPPreprocessor:
         # Fit tokenizer on texts
         print("Tokenizing texts...")
         self.tokenizer.fit_on_texts(texts)
+
+        # Saving the trained Tokenizer
+        json_token = self.tokenizer.to_json()
+        with open('trained_tokenizer.json', 'w', encoding="utf-8") as handle:
+            handle.write(json_token)
         
         # Convert texts to sequences
         sequences = self.tokenizer.texts_to_sequences(texts)
@@ -287,8 +310,12 @@ class NLPPreprocessor:
                                     padding='post', truncating='post')
         
         # Encode labels
-        # encoded_labels = self.label_encoder.fit_transform(labels)
-        encoded_labels = self.onehot_encoder.fit_transform(labels)
+        # encoded_labels = self.onehot_encoder.fit_transform(labels)
+        self.onehot_encoder.fit(labels)
+        encoded_labels = self.onehot_encoder.transform(labels)
+
+        # Saving the fitted Encoder
+        joblib.dump(self.onehot_encoder, 'OHEncoder.joblib')
         
         # Create Word2Vec embeddings if requested
         embedding_matrix = None
@@ -385,7 +412,7 @@ class NLPPreprocessor:
     
     def decode_predictions(self, predictions):
         """Convert predicted label indices back to original labels"""
-        return self.label_encoder.inverse_transform(predictions)
+        return self.onehot_encoder.inverse_transform(predictions)
 
 # Example usage:
 '''
