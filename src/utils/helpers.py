@@ -141,3 +141,55 @@ class PlotMetrics:
         if self.save_dir:
             plt.savefig(f'{self.save_dir}/auc.png')
         plt.show()
+
+    def plot_combined_metrics(self, history):
+        """Plot all metrics (accuracy, loss, precision, recall, AUC) in a single figure"""
+        fig, axes = plt.subplots(3, 2, figsize=(15, 18))
+        fig.suptitle('Model Metrics Overview', fontsize=16)
+        
+        # Plot accuracy
+        axes[0,0].plot(history.history['accuracy'], label='Training Accuracy')
+        axes[0,0].plot(history.history['val_accuracy'], label='Validation Accuracy')
+        axes[0,0].set_title('Model Accuracy')
+        axes[0,0].set_xlabel('Epoch')
+        axes[0,0].set_ylabel('Accuracy')
+        axes[0,0].legend()
+
+        # Plot loss
+        axes[0,1].plot(history.history['loss'], label='Training Loss')
+        axes[0,1].plot(history.history['val_loss'], label='Validation Loss')
+        axes[0,1].set_title('Model Loss')
+        axes[0,1].set_xlabel('Epoch')
+        axes[0,1].set_ylabel('Loss')
+        axes[0,1].legend()
+
+        # Plot precision
+        axes[1,0].plot(history.history['precision'], label='Training Precision')
+        axes[1,0].plot(history.history['val_precision'], label='Validation Precision')
+        axes[1,0].set_title('Model Precision')
+        axes[1,0].set_xlabel('Epoch')
+        axes[1,0].set_ylabel('Precision')
+        axes[1,0].legend()
+
+        # Plot recall
+        axes[1,1].plot(history.history['recall'], label='Training Recall')
+        axes[1,1].plot(history.history['val_recall'], label='Validation Recall')
+        axes[1,1].set_title('Model Recall')
+        axes[1,1].set_xlabel('Epoch')
+        axes[1,1].set_ylabel('Recall')
+        axes[1,1].legend()
+
+        # Plot AUC
+        axes[2,0].plot(history.history['AUC'], label='Training AUC')
+        axes[2,0].plot(history.history['val_AUC'], label='Validation AUC')
+        axes[2,0].set_title('Model AUC')
+        axes[2,0].set_xlabel('Epoch')
+        axes[2,0].set_ylabel('AUC')
+        axes[2,0].legend()
+
+        # Adjust layout
+        plt.tight_layout()
+        
+        if self.save_dir:
+            plt.savefig(f'{self.save_dir}/combined_metrics.png')
+        plt.show()

@@ -20,6 +20,12 @@ class TextClassifier(Model):
     def __init__(self, vocab_size, embed_dim, num_classes, embedding_matrix=None):
         super(TextClassifier, self).__init__()
         
+        # Store these values as instance variables
+        self.vocab_size = vocab_size
+        self.embed_dim = embed_dim
+        self.num_classes = num_classes
+        self.embedding_matrix = embedding_matrix
+        
         # Embedding layer with input_length specified
         self.embedding = Embedding(
             vocab_size, 
@@ -88,6 +94,27 @@ class TextClassifier(Model):
         
         # Output
         return self.output_layer(x)
+
+    def get_config(self):
+        config = {
+            'vocab_size': self.vocab_size,
+            'embed_dim': self.embed_dim,
+            'num_classes': self.num_classes,
+            'embedding_matrix': None  # Don't save embedding matrix in config
+        }
+        return config
+
+    @classmethod
+    def from_config(cls, config):
+        # Extract only the parameters needed for initialization
+        init_config = {
+            'vocab_size': config.get('vocab_size'),
+            'embed_dim': config.get('embed_dim'), 
+            'num_classes': config.get('num_classes'),
+            'embedding_matrix': None  # Initialize with None, will be loaded separately
+        }
+        # Only pass parameters that __init__ expects
+        return cls(**init_config)
 
 ## Model Building
 class TextAnalysisModel2(Model):

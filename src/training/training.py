@@ -13,7 +13,7 @@ from nltk.corpus import stopwords
 from sklearn.preprocessing import LabelEncoder
 
 import tensorflow as tf
-from tensorflow import keras
+import keras
 from tensorflow.keras import layers
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.preprocessing.text import Tokenizer
@@ -30,6 +30,8 @@ from src.model.model import TextClassifier
 
 from src.utils.helpers import validate_and_rename_columns, PlotMetrics
 
+import pickle
+
 
 # Calling base dataset.
 def call_data():
@@ -39,22 +41,47 @@ def call_data():
     dataf['cleaned_text'] = dataf['Resume'].apply(ResumeTextPreprocessor().process_and_check)
     return dataf
 
-def preprocessor_func():
-    preprocessor = NLPPreprocessor(
-        max_words=10000,
-        max_length=500,
-        embedding_dim=100,
-        TFDataset=True
-    )
-    return preprocessor
+def preprocessor_func(train: bool = True, Token = None, Encoder = None):
+    if train:
+        preprocessor = NLPPreprocessor(
+            max_words=10000,
+            max_length=500,
+            embedding_dim=100,
+            TFDataset=True,
+            training=train,
+        )
+        return preprocessor
+    else:
+        if Token is None:
+            raise Exception("Tokenizer object not found! Please write the correct path or tokenizer name!")
+            return None
+        else:
+            preprocessor = NLPPreprocessor(
+                max_words=10000,
+                max_length=500,
+                embedding_dim=100,
+                TFDataset=True,
+                training=train,
+                Token=Token,
+                Encoder=Encoder
+            )
+            return preprocessor
 
-def data_preparing_func(preprocessor, dataf: pd.DataFrame) -> pd.DataFrame:
-    data = preprocessor.prepare_data(
-        texts=dataf['cleaned_text'],
-        labels=np.array(dataf['Category']).reshape(-1, 1),
-        use_word2vec=True  # Use Word2Vec embeddings
-    )
-    return data
+def data_preparing_func(preprocessor, dataf: pd.DataFrame, training: bool = True) -> pd.DataFrame:
+    if training:
+        data = preprocessor.prepare_data(
+            texts=dataf['cleaned_text'],
+            labels=np.array(dataf['Category']).reshape(-1, 1),
+            use_word2vec=True  # Use Word2Vec embeddings
+        )
+        return data
+    else:
+        data = preprocessor.prepare_data(
+            texts=dataf['cleaned_text'],
+            labels=np.array(dataf['Category']).reshape(1, -1),
+            use_word2vec=True  # Use Word2Vec embeddings
+        )
+        return data
 
 def Imbalanced_Data_Handler(preprocessor, strategy: str = "undersample"):
     """
@@ -86,7 +113,7 @@ def class_weights(data):
     weights = [class_weights[label] for label in data['y_train']]
     return weights
 
-def model_comp(data, preprocessor):
+def model_comp(data, preprocessor, training: bool = True):
     # Setting the Vocab Size from the Embedding Matrix
     if data['embedding_matrix'] is not None:
         vocab_size = data['embedding_matrix'].shape[0] 
@@ -104,12 +131,13 @@ def model_comp(data, preprocessor):
         'best_model.keras',
         monitor='val_loss',
         save_best_only=True,
+        save_weights_only=False,
         mode='min',
         verbose=1
     )
 
     # Initialize Model
-    model_2 = TextClassifier(
+    model = TextClassifier(
         vocab_size=vocab_size,
         embed_dim=preprocessor.embedding_dim,
         num_classes=data['num_classes'],
@@ -117,7 +145,7 @@ def model_comp(data, preprocessor):
     )
 
     # Compile model
-    model_2.compile(
+    model.compile(
         optimizer='adam',
         loss='categorical_crossentropy',
         metrics=[
@@ -127,18 +155,25 @@ def model_comp(data, preprocessor):
             tf.keras.metrics.AUC(name='AUC'),
         ]
     )
+
+    if training:
+        # Clear any custom objects registration to avoid conflicts
+        keras.saving.get_custom_objects().clear()
+        # Register our custom model class
+        keras.saving.get_custom_objects()["TextClassifier"] = TextClassifier
         
-    return model_2, [early_stopping, checkpoint]
+        return model, [early_stopping, checkpoint]
+    else:
+        return model
 
-
-def train_step(Handler, model, callbacks, data):
+def train_step(Handler, model, callbacks, data, Epochs):
     # Train model with class weights if using weighted strategy
     if Handler.strategy == "weighted":
         print("Using Weighted Class Balancing!")
         history = model.fit(
             data['train_dataset'],
             validation_data=data['val_dataset'],
-            epochs=50,
+            epochs=Epochs,
             class_weight=Handler.calculate_class_weights(data['y_train']), ### To be used when large enough Dataset ###
             callbacks = callbacks
         )
@@ -148,7 +183,7 @@ def train_step(Handler, model, callbacks, data):
         history = model.fit(
             data['train_dataset'],
             validation_data=data['val_dataset'],
-            epochs=50,
+            epochs=Epochs,
             callbacks=callbacks
         )
         return history
@@ -156,25 +191,30 @@ def train_step(Handler, model, callbacks, data):
         history = model.fit(
             data['train_dataset'],
             validation_data=data['val_dataset'],
-            epochs=50,
+            epochs=Epochs,
             callbacks=callbacks
         )
         return history
 
 
 if __name__ == "__main__":
+    # Register the custom model class for saving/loading
+    keras.saving.get_custom_objects().clear()
+    keras.saving.get_custom_objects()["TextClassifier"] = TextClassifier
+    
     handler = Imbalanced_Data_Handler(preprocessor_func(), 'weighted')
 
-    fin_Data = data_preparing_func(preprocessor_func(), call_data())
-
+    fin_Data = data_preparing_func(preprocessor_func(), call_data(), training=True)
+    # print(fin_Data)
     model, calls = model_comp(fin_Data, preprocessor_func())
 
-    train_model = train_step(Handler=handler, model=model, callbacks=calls, data=fin_Data)
+    train_model = train_step(Handler=handler, model=model, callbacks=calls, data=fin_Data, Epochs=20)
     
+    # Save the model with standard options, don't specify save_format
+    model.save("best_model.keras")
+
     # Plotting the Metrics.
     plotter = PlotMetrics()
-    plotter.plot_accuracy(history=train_model)
-    plotter.plot_loss(history=train_model)
-    plotter.plot_precision(history=train_model)
-    plotter.plot_recall(history=train_model)
-    plotter.plot_auc(history=train_model)
+    plotter.plot_combined_metrics(history=train_model)
+
+
