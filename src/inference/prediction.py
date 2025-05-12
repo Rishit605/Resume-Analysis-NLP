@@ -3,15 +3,24 @@ import sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import numpy as np
+import pandas as pd
+import joblib
+
+import keras
 import tensorflow as tf
-from tensorflow.keras.models import load_model, model_from_json
+from tensorflow.keras.models import load_model
+from tensorflow.keras.preprocessing.text import Tokenizer
+from tensorflow.keras.preprocessing.sequence import pad_sequences
+from tensorflow.keras.preprocessing.text import tokenizer_from_json
+
 
 from src.preprocessing.data_preprocessing import ResumeTextPreprocessor, NLPPreprocessor
 from src.utils.helpers import validate_and_rename_columns
 from src.training.training import Imbalanced_Data_Handler, data_preparing_func, call_data, preprocessor_func, model_comp
+from src.model.model import TextClassifier
 
 class ResumePredictor:
-    def __init__(self, model_arc_path: str, weights_path: str, preprocessor: NLPPreprocessor = None):
+    def __init__(self, model_path: str, preprocessor: NLPPreprocessor = None):
         """
         Initialize the predictor with a trained model and preprocessor
         
@@ -19,24 +28,22 @@ class ResumePredictor:
             model_path (str): Path to the saved model file
             preprocessor (NLPPreprocessor, optional): Preprocessor instance
         """
-        # with open(model_arc_path, 'r') as json_file:
-        #     model_json = json_file.read()
-        # self.model = model_from_json(model_json)
-        # self.model.load_weights(weights_path)
-
-        # self.model.compile(
-        #     optimizer='adam',
-        #     loss='categorical_crossentropy',
-        #     metrics=[
-        #         'accuracy',
-        #         tf.keras.metrics.Precision(name='precision'),
-        #         tf.keras.metrics.Recall(name='recall'),
-        #         tf.keras.metrics.AUC(name='AUC'),
-        #     ]
-        # )
-
-        self.model = load_model(r"C:\Projs\COde\ResAnalysis\Resume-Analysis-NLP\best_model.keras")
-        self.preprocessor = preprocessor_func()
+        # Register custom model class before loading
+        keras.saving.get_custom_objects().clear()
+        keras.saving.get_custom_objects()["TextClassifier"] = TextClassifier
+        
+        self.model = load_model(model_path)
+        
+        if preprocessor is None:
+            # Initialize preprocessor and fit tokenizer on training data
+            self.preprocessor = preprocessor_func(train=True)
+            # Get the training data to fit tokenizer
+            dataf = call_data()
+            # Fit tokenizer on cleaned text data
+            self.preprocessor.tokenizer.fit_on_texts(dataf['cleaned_text'])
+        else:
+            self.preprocessor = preprocessor
+            
         self.resume_cleaner = ResumeTextPreprocessor()
     
     def preprocess_text(self, text: str) -> str:
@@ -58,23 +65,26 @@ class ResumePredictor:
         
         # Convert text to sequence using preprocessor
         processed_text = self.preprocessor.predict_process(cleaned_text)
-        # print(len(processed_text))
-        # # Make prediction
+        
+        # Make prediction
         predictions = self.model.predict(processed_text)
         predicted_class_index = np.argmax(predictions)
+        print(predicted_class_index.shape, predicted_class_index.reshape(-1, 1).shape, predicted_class_index.reshape(1, -1).shape)
         confidence_score = float(predictions[0][predicted_class_index])
-        # print(predicted_class_index)
-        # # Get predicted category name
-        # predicted_category = self.preprocessor.decode_predictions([predicted_class_index])[0]
         
-        # return {
-        #     'category': predicted_category,
-        #     'confidence': confidence_score,
-        #     'all_probabilities': {
-        #         category: float(prob) 
-        #         for category, prob in zip(self.preprocessor.label_encoder.classes_, predictions[0])
-        #     }
-        # }
+        # Get predicted category name
+        one_hot = np.zeros((1, predictions.shape[1]))
+        one_hot[0, predicted_class_index] = 1
+        predicted_category = self.preprocessor.decode_predictions(one_hot)[0]
+        
+        return {
+            'category': predicted_category,
+            'confidence': confidence_score,
+            'all_probabilities': {
+                category: float(prob) 
+                for category, prob in zip(self.preprocessor.onehot_encoder.get_feature_names_out(), predictions[0])
+            }
+        }
     
     def predict_batch(self, texts: list) -> list:
         """
@@ -93,34 +103,25 @@ class ResumePredictor:
         return predictions
 
 
-def load_predictor(model_path: str, preprocessor_path: str = None) -> ResumePredictor:
-    """
-    Helper function to load the predictor with saved model and preprocessor
-    
-    Args:
-        model_path (str): Path to saved model
-        preprocessor_path (str, optional): Path to saved preprocessor
-        
-    Returns:
-        ResumePredictor: Initialized predictor instance
-    """
-    # Load preprocessor if path provided
-    preprocessor = None
-    if preprocessor_path:
-        # Add logic to load saved preprocessor state
-        pass
-        
-    return ResumePredictor(model_path, preprocessor)
-
 
 if __name__ == "__main__":
     # Example usage
-    MODEL_JSON_PATH = r"C:\Projs\COde\ResAnalysis\Resume-Analysis-NLP\model_architecture.json"
-    WEIGHTS_PATH = "C:/Projs/COde/ResAnalysis/Resume/Analysis-NLP/best_weights.weights.h5"
+    MODEL_PATH = r"C:\Projs\COde\ResAnalysis\Resume-Analysis-NLP\best_model.keras"
+
+    # Load trained Tokenizer
+    with open("trained_tokenizer.json", "r", encoding='utf-8') as f:
+        loaded_tokenizer = tokenizer_from_json(f.read())
+
+    encoder = joblib.load('OHEncoder.joblib')
+
+    # Register custom model class before loading
+    keras.saving.get_custom_objects().clear()
+    keras.saving.get_custom_objects()["TextClassifier"] = TextClassifier
+
+    model = load_model(MODEL_PATH)
     
-    
-    # Initialize predictor
-    predictor = ResumePredictor(MODEL_JSON_PATH, WEIGHTS_PATH)
+    # Initialize preprocessor with vocabulary from training data
+    prep = preprocessor_func(train=False, Token=loaded_tokenizer, Encoder=encoder)
     
     # Example resume text
     sample_resume = """
@@ -129,11 +130,26 @@ if __name__ == "__main__":
     Led multiple projects and mentored junior developers.
     """
     
+    # # Preprocess the text
+    # cleaned_text = preprocess_text(sample_resume)
+    # print("Cleaned text:\n", cleaned_text)
+    
+    # # Process for prediction
+    # processed = prep.predict_process(cleaned_text)
+    # print("\n\nProcessed sequence:\n", processed)
+    
     # # Make prediction
+    # predictions = model.predict(processed)
+    # predicted_class_index = np.argmax(predictions)
+    
+    # print("\n\nPrediction output:")
+    # print(f"Predicted class index: {predicted_class_index}")
+    # print(f"Probabilities: {predictions[0]}")
+    
+    # Try creating a full predictor
+    predictor = ResumePredictor(MODEL_PATH, prep)
     result = predictor.predict(sample_resume)
-    print("\nPrediction Results:")
+    
+    print("\n\nPredictor Results:")
     print(f"Predicted Category: {result['category']}")
     print(f"Confidence Score: {result['confidence']:.2%}")
-    # print("\nAll Category Probabilities:")
-    # for category, prob in result['all_probabilities'].items():
-    #     print(f"{category}: {prob:.2%}")
