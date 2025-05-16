@@ -4,16 +4,6 @@ from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Embedding, Conv1D, GlobalMaxPooling1D, Dropout, Dense, BatchNormalization
 from tensorflow.keras.regularizers import l2, l1
 
-# ## MODEL BUILDING
-# model = Sequential([
-#     layers.Embedding(vocab_size, embed_dim, input_length=max_length),
-#     layers.Conv1D(conv_units, kernels, activation='relu', kernel_regularizer=regularizers.l2(regularizer)),  # Adding L2 regularization
-#     layers.GlobalMaxPooling1D(),
-#     layers.Dropout(dropout),  # Adding dropout to prevent overfitting
-#     layers.Dense(dense_units, activation='relu', kernel_regularizer=regularizers.l1(regularizer)),  # Adding L1 regularization
-#     layers.Dropout(dropout),  # Adding dropout to prevent overfitting
-#     layers.Dense(output, activation='softmax', kernel_regularizer=regularizers.l2(regularizer)),  # Adding L2 regularization
-# ])
 
 ## MODEL BUILDING
 class TextClassifier(Model):
