@@ -1,11 +1,10 @@
 import os, sys
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import unittest
 import numpy as np
 import pandas as pd
-from src.preprocessing.data_preprocessing import ResumeTextPreprocessor
-from src.training.training import call_data, data_preparing_func
+from src.preprocessing import ResumeTextPreprocessor
+from src.training import call_data, data_preparing_func
 
 class TestDataPreprocessing(unittest.TestCase):
     @classmethod
