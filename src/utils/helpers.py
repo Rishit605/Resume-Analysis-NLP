@@ -21,8 +21,8 @@ def validate_and_rename_columns(
         ValueError: If required columns are missing and no matching columns are found
     """
     required_columns = {
-        'Text': 'Resume',  # Rename 'Text' to 'Resume'
-        'Category': 'Category'  # Keep 'Category' as is
+        'Text': 'Resume',
+        'Category': 'Category'
         }
     
     # Create a copy to avoid modifying the original DataFrame
@@ -193,3 +193,29 @@ class PlotMetrics:
         if self.save_dir:
             plt.savefig(f'{self.save_dir}/combined_metrics.png')
         plt.show()
+
+class ExtractTextFromFile:
+    def __init__(self, file):
+        self.input_file = file
+
+    def pdfExtractor(self, fbytes) -> str:
+        import fitz
+
+        pdf_extracted_text = ""
+
+        with fitz.open(stream=fbytes, filetype="pdf") as doc:
+            for page in doc:
+                pdf_extracted_text += page.get_text()
+
+        return pdf_extracted_text
+    
+    def docExtractor(self, fbytes) -> str:
+        from docx import Document
+        
+        doc_extracted_text = ""
+        
+        doc = Document(io.BytesIO(fbytes))
+        for para in doc.paragraphs:
+            doc_extracted_text += para.text + "\n"
+
+        return doc_extracted_text
