@@ -1,5 +1,4 @@
 import os, sys
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import re
 from typing import Dict
@@ -9,6 +8,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 import nltk
+import pickle
 from nltk.corpus import stopwords
 from sklearn.preprocessing import LabelEncoder
 
@@ -20,18 +20,14 @@ from tensorflow.keras.preprocessing.text import Tokenizer
 from tensorflow.keras.preprocessing.sequence import pad_sequences
 from tensorflow.keras import regularizers
 
-from src.preprocessing.data_preprocessing import (
+# Updated imports using package structure
+from src.preprocessing import (
     ResumeTextPreprocessor,
     NLPPreprocessor,
     ImbalancedNLPHandler,
 )
-
-from src.model.model import TextClassifier
-
-from src.utils.helpers import validate_and_rename_columns, PlotMetrics
-
-import pickle
-
+from src.model import TextClassifier
+from src.utils import validate_and_rename_columns, PlotMetrics
 
 # Calling base dataset.
 def call_data():
@@ -205,12 +201,12 @@ if __name__ == "__main__":
     handler = Imbalanced_Data_Handler(preprocessor_func(), 'weighted')
 
     fin_Data = data_preparing_func(preprocessor_func(), call_data(), training=True)
-    # print(fin_Data)
+    
     model, calls = model_comp(fin_Data, preprocessor_func())
 
     train_model = train_step(Handler=handler, model=model, callbacks=calls, data=fin_Data, Epochs=20)
     
-    # Save the model with standard options, don't specify save_format
+    # Save the model
     model.save("best_model.keras")
 
     # Plotting the Metrics.
