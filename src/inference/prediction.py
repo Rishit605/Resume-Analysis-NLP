@@ -1,6 +1,5 @@
 import os
 import sys
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import numpy as np
 import pandas as pd
@@ -13,14 +12,14 @@ from tensorflow.keras.preprocessing.text import Tokenizer
 from tensorflow.keras.preprocessing.sequence import pad_sequences
 from tensorflow.keras.preprocessing.text import tokenizer_from_json
 
-
-from src.preprocessing.data_preprocessing import ResumeTextPreprocessor, NLPPreprocessor
-from src.utils.helpers import validate_and_rename_columns
-from src.training.training import Imbalanced_Data_Handler, data_preparing_func, call_data, preprocessor_func, model_comp
-from src.model.model import TextClassifier
+# Updated imports using package structure
+from src.preprocessing import ResumeTextPreprocessor, NLPPreprocessor
+from src.utils import validate_and_rename_columns, ExtractTextFromFile
+from src.training import Imbalanced_Data_Handler, data_preparing_func, preprocessor_func, call_data
+from src.model import TextClassifier
 
 class ResumePredictor:
-    def __init__(self, model_path: str, preprocessor: NLPPreprocessor = None):
+    def __init__(self, model_path, preprocessor: NLPPreprocessor = None):
         """
         Initialize the predictor with a trained model and preprocessor
         
@@ -32,8 +31,12 @@ class ResumePredictor:
         keras.saving.get_custom_objects().clear()
         keras.saving.get_custom_objects()["TextClassifier"] = TextClassifier
         
-        self.model = load_model(model_path)
         
+        if isinstance(model_path, str):
+            self.model = load_model(model_path)
+        else:
+            self.model = model_path
+            
         if preprocessor is None:
             # Initialize preprocessor and fit tokenizer on training data
             self.preprocessor = preprocessor_func(train=True)
@@ -45,7 +48,7 @@ class ResumePredictor:
             self.preprocessor = preprocessor
             
         self.resume_cleaner = ResumeTextPreprocessor()
-    
+
     def preprocess_text(self, text: str) -> str:
         """Clean and preprocess the input text"""
         return self.resume_cleaner.process_and_check(text)
@@ -69,7 +72,7 @@ class ResumePredictor:
         # Make prediction
         predictions = self.model.predict(processed_text)
         predicted_class_index = np.argmax(predictions)
-        print(predicted_class_index.shape, predicted_class_index.reshape(-1, 1).shape, predicted_class_index.reshape(1, -1).shape)
+        # print(predicted_class_index.shape, predicted_class_index.reshape(-1, 1).shape, predicted_class_index.reshape(1, -1).shape)
         confidence_score = float(predictions[0][predicted_class_index])
         
         # Get predicted category name
@@ -103,23 +106,21 @@ class ResumePredictor:
         return predictions
 
 
-
 if __name__ == "__main__":
-    # Example usage
-    MODEL_PATH = r"C:\Projs\COde\ResAnalysis\Resume-Analysis-NLP\best_model.keras"
+    MODEL_PATH = "best_model.keras"
 
     # Load trained Tokenizer
-    with open("trained_tokenizer.json", "r", encoding='utf-8') as f:
+    with open("src/model/trained_tokenizer.json", "r", encoding='utf-8') as f:
         loaded_tokenizer = tokenizer_from_json(f.read())
 
-    encoder = joblib.load('OHEncoder.joblib')
+    encoder = joblib.load('src/model/OHEncoder.joblib')
 
     # Register custom model class before loading
     keras.saving.get_custom_objects().clear()
     keras.saving.get_custom_objects()["TextClassifier"] = TextClassifier
 
-    model = load_model(MODEL_PATH)
-    
+    # model = load_model(MODEL_PATH) # Testing Model Loading
+
     # Initialize preprocessor with vocabulary from training data
     prep = preprocessor_func(train=False, Token=loaded_tokenizer, Encoder=encoder)
     
@@ -129,22 +130,6 @@ if __name__ == "__main__":
     Skilled in machine learning, data analysis, and web development using Django.
     Led multiple projects and mentored junior developers.
     """
-    
-    # # Preprocess the text
-    # cleaned_text = preprocess_text(sample_resume)
-    # print("Cleaned text:\n", cleaned_text)
-    
-    # # Process for prediction
-    # processed = prep.predict_process(cleaned_text)
-    # print("\n\nProcessed sequence:\n", processed)
-    
-    # # Make prediction
-    # predictions = model.predict(processed)
-    # predicted_class_index = np.argmax(predictions)
-    
-    # print("\n\nPrediction output:")
-    # print(f"Predicted class index: {predicted_class_index}")
-    # print(f"Probabilities: {predictions[0]}")
     
     # Try creating a full predictor
     predictor = ResumePredictor(MODEL_PATH, prep)
