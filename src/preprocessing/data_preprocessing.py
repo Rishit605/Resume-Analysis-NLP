@@ -1,5 +1,27 @@
 import re
 import nltk
+
+# Download required NLTK data if not already present
+try:
+    nltk.data.find('tokenizers/punkt')
+except LookupError:
+    nltk.download('punkt')
+
+try:
+    nltk.data.find('corpora/stopwords')
+except LookupError:
+    nltk.download('stopwords')
+
+try:
+    nltk.data.find('corpora/wordnet')
+except LookupError:
+    nltk.download('wordnet')
+
+try:
+    nltk.data.find('tokenizers/punkt_tab')
+except LookupError:
+    nltk.download('punkt_tab')
+
 from nltk.corpus import stopwords
 from nltk.tokenize import word_tokenize
 from nltk.stem import WordNetLemmatizer
@@ -16,11 +38,6 @@ from tensorflow.keras.preprocessing.sequence import pad_sequences
 
 from sklearn.preprocessing import LabelEncoder, OneHotEncoder
 from sklearn.model_selection import train_test_split
-
-# Download required NLTK data
-# nltk.download('punkt_tab')
-# nltk.download('stopwords')
-# nltk.download('wordnet')
 
 
 class ResumeTextPreprocessor:
