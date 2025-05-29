@@ -1,0 +1,33 @@
+# Ignore Folders
+old/
+dataset/
+notebook/
+__pycache__/
+
+# Ignore Files
+*.pyc
+*.pyo
+*.pyd
+*.pyw
+*.pyz
+*.pywz
+*.pywz.pyc
+*.pywz.pyo
+*.pywz.pyd
+
+# 
+*.ipynb
+*.csv
+*.log
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.svg
+
+# IDE / OS specific
+.vscode/
+
+# Git specific
+.git/
+.gitignore
