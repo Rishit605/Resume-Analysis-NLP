@@ -8,6 +8,7 @@ import joblib
 from typing import Optional
 
 import tensorflow as tf
+import keras
 from tensorflow.keras.models import load_model
 from tensorflow.keras.preprocessing.text import tokenizer_from_json
 import numpy as np
@@ -28,8 +29,12 @@ app = FastAPI(
 
 ## Loading the models
 try:
+    # Register custom model class before loading
+    keras.saving.get_custom_objects().clear()
+    keras.saving.get_custom_objects()["TextClassifier"] = TextClassifier
+
     # Load Model
-    model = load_model("best_model.keras")
+    model = load_model("src/model/best_model.keras")
     logger.info("Model loaded successfully")
 except FileNotFoundError:
     logger.error("Model file not found! Please check the path.")
@@ -37,7 +42,7 @@ except FileNotFoundError:
 
 # Load the Tokenizer
 try:
-    with open("trained_tokenizer.json", "r", encoding='utf-8') as f:
+    with open("src/model/trained_tokenizer.json", "r", encoding='utf-8') as f:
         tokenizer = tokenizer_from_json(f.read())
         logger.info("Tokenizer loaded successfully")
 except FileNotFoundError:
@@ -46,7 +51,7 @@ except FileNotFoundError:
 
 # Load the Encoder
 try:
-    encoder = joblib.load('OHEncoder.joblib')
+    encoder = joblib.load('src/model/OHEncoder.joblib')
     logger.info("Encoder loaded successfully")
 except FileNotFoundError:
     logger.error("Encoder file not found! Please try again later.")
@@ -245,6 +250,7 @@ async def modelRetraining(background_tasks: BackgroundTasks):
             detail="Data Preprocessor Function failed to load properly. Please check the parameters and configuration."
         )
 
+    ## TODO: ERROR! The data_preparing_func is not working properly needs to be fixed.
     try:
         fin_Data = data_preparing_func(preprocessor_func(), call_data(), training=True)
     except Exception as e:
@@ -254,7 +260,7 @@ async def modelRetraining(background_tasks: BackgroundTasks):
         )
 
     try:
-        model, calls = model_comp(fin_Data, preprocessor_func())
+        model_retrained, calls = model_comp(fin_Data, preprocessor_func())
     except Exception as e:
         raise HTTPException(
             status_code=513, 
@@ -262,7 +268,7 @@ async def modelRetraining(background_tasks: BackgroundTasks):
         )
 
     try:
-        train_model = train_step(Handler=handler, model=model, callbacks=calls, data=fin_Data, Epochs=20)
+        train_model = train_step(Handler=handler, model=model_retrained, callbacks=calls, data=fin_Data, Epochs=20)
         status = "started"
         message = "Training has started successfully."
         progress = "Training in progress."
@@ -273,7 +279,7 @@ async def modelRetraining(background_tasks: BackgroundTasks):
         )
 
     try:
-        model.save("best_model.keras")
+        model_retrained.save("src/model/best_model_retrained.keras")
         status = "completed"
         message = "Model saved successfully!"
         progress = "Training completed and model saved."
@@ -302,5 +308,3 @@ async def read_root():
 async def get_log_status_endpoint():
     """Returns information about the current logging setup"""
     return get_log_status()
-
-
