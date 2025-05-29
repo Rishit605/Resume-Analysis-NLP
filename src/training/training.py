@@ -124,7 +124,7 @@ def model_comp(data, preprocessor, training: bool = True):
     )
     
     checkpoint = tf.keras.callbacks.ModelCheckpoint(
-        'best_model.keras',
+        r'src\model\best_model.keras',
         monitor='val_loss',
         save_best_only=True,
         save_weights_only=False,
