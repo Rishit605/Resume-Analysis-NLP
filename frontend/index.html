@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Resume Classification</title>
+    <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+    <div class="container">
+        <div class="left-column">
+            <h1>Resume Classification</h1>
+            
+            <!-- Text Input Section -->
+            <div class="input-section">
+                <h2>Enter Resume Text</h2>
+                <textarea id="resumeText" placeholder="Paste your resume text here..."></textarea>
+            </div>
+
+            <div class="divider">
+                <span>OR</span>
+            </div>
+
+            <!-- File Upload Section -->
+            <div class="input-section">
+                <h2>Upload Resume File</h2>
+                <input type="file" id="resumeFile" accept=".pdf,.docx,.doc">
+                <button id="uploadBtn" class="btn">Upload File</button>
+            </div>
+
+            <!-- Prediction Button -->
+            <button id="predictBtn" class="btn primary">Classify Resume</button>
+
+            <!-- Results Section -->
+            <div class="results-section">
+                <h2>Classification Results</h2>
+                <div class="result-item">
+                    <span class="label">Category:</span>
+                    <span id="categoryResult">-</span>
+                </div>
+                <div class="result-item">
+                    <span class="label">Confidence:</span>
+                    <span id="confidenceResult">-</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="right-column">
+            <h2>File Preview</h2>
+            <div id="filePreview">
+                <p class="placeholder">No file selected</p>
+            </div>
+        </div>
+    </div>
+    <script src="/static/script.js"></script>
+</body>
+</html>
