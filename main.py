@@ -20,11 +20,14 @@ from src.model import TextClassifier
 from src.inference import ResumePredictor
 from src.utils.logger import logger, get_log_status
 
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
+
 # Initialize FastAPI
 app = FastAPI(
     title="Resume Classification API",
     description="API to classify resumes=",
-    version="0.2.0"
+    version="0.3.0"
 )
 
 ## Loading the models
@@ -75,6 +78,7 @@ class ClassificationResponse(BaseModel):
     confidence: float
     status: str
     request_id: str | None = None
+    extracted_text: str | None = None
 
 class RetrainingResponse(BaseModel):
     status: str
@@ -165,7 +169,7 @@ async def classifyResumeEP(resume_txt: ResumeInput, typeChecker: bool = True):
                 test = "Success Using Text."
                 logger.debug(f"[{request_id}] Successfully extracted prediction results")
 
-                return ClassificationResponse(category=prediction_category, confidence=prediction_confidence, status=test)
+                return ClassificationResponse(category=prediction_category, confidence=prediction_confidence, status=test, extracted_text=text)
 
             except Exception as e:
                 logger.error(f"[{request_id}] Error during prediction: {str(e)}")
@@ -220,7 +224,7 @@ async def classifyResumeEP(file: UploadFile = File(...)):
                 test = "Success Using File."
                 logger.debug(f"[{request_id}] Successfully extracted prediction results")
 
-                return ClassificationResponse(category=prediction_category, confidence=prediction_confidence, status=test)
+                return ClassificationResponse(category=prediction_category, confidence=prediction_confidence, status=test, extracted_text=text)
             except Exception as e:
                 logger.error(f"[{request_id}] Error during prediction: {str(e)}")
                 raise HTTPException(status_code=500, detail=f"Error during prediction: {str(e)}")
@@ -300,11 +304,13 @@ async def modelRetraining(background_tasks: BackgroundTasks):
 
 @app.get("/")
 async def read_root():
-    logger.info("Root endpoint '/' accessed.")
-    return {"message": "Welcome to the Resume Classification API!"}
+    return FileResponse("frontend/index.html")
 
 
 @app.get("/logs/status")
 async def get_log_status_endpoint():
     """Returns information about the current logging setup"""
     return get_log_status()
+
+# Add this after creating the FastAPI app
+app.mount("/static", StaticFiles(directory="frontend"), name="static")
